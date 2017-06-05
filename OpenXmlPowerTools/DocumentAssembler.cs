@@ -35,6 +35,7 @@ namespace OpenXmlPowerTools
 {
     public class DocumentAssembler
     {
+        static readonly log4net.ILog logger = log4net.LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
         public static WmlDocument AssembleDocument(WmlDocument templateDoc, XmlDocument data, out bool templateError)
         {
             XDocument xDoc = data.GetXDocument();
@@ -66,13 +67,16 @@ namespace OpenXmlPowerTools
 
         private static void ProcessTemplatePart(XElement data, TemplateError te, OpenXmlPart part)
         {
+logger.Debug("ProcessTemplatePart " + part.Uri.ToString());
             XDocument xDoc = part.GetXDocument();
 
             var xDocRoot = RemoveGoBackBookmarks(xDoc.Root);
 
             // content controls in cells can surround the W.tc element, so transform so that such content controls are within the cell content
+logger.Debug("  NormalizeContentControlsInCells");
             xDocRoot = (XElement)NormalizeContentControlsInCells(xDocRoot);
 
+logger.Debug("  TransformToMetadata");
             xDocRoot = (XElement)TransformToMetadata(xDocRoot, data, te);
 
             // Table might have been placed at run-level, when it should be at block-level, so fix this.
@@ -191,6 +195,7 @@ namespace OpenXmlPowerTools
             {
                 if (element.Name == W.sdt && element.Parent.Name == W.tr)
                 {
+logger.Debug("    Found content control directly nested in table row. Inverting.");
                     var newCell = new XElement(W.tc,
                         element.Elements(W.tc).Elements(W.tcPr),
                         new XElement(W.sdt,
@@ -360,9 +365,11 @@ namespace OpenXmlPowerTools
                         .Select(t => (string)t)
                         .StringConcatenate()
                         .Trim();
+logger.Debug("paraContents = " + paraContents);
                     int occurances = paraContents.Select((c, i) => paraContents.Substring(i)).Count(sub => sub.StartsWith("<#"));
                     if (paraContents.StartsWith("<#") && paraContents.EndsWith("#>") && occurances == 1)
                     {
+logger.Debug("  startswith..endswith");
                         var xmlText = paraContents.Substring(2, paraContents.Length - 4).Trim();
                         XElement xml = TransformXmlTextToMetadata(te, xmlText);
                         if (xml.Name == W.p || xml.Name == W.r)
@@ -372,14 +379,25 @@ namespace OpenXmlPowerTools
                     }
                     if (paraContents.Contains("<#"))
                     {
+logger.Debug("  contains...");
+logger.Debug("  element starts as: " + element);
                         List<RunReplacementInfo> runReplacementInfo = new List<RunReplacementInfo>();
                         var thisGuid = Guid.NewGuid().ToString();
                         var r = new Regex("<#.*?#>");
                         XElement xml = null;
-                        OpenXmlRegex.Replace(new[] { element }, r, thisGuid, (para, match) =>
+                        foreach (var lrpb in element.Descendants(W.lastRenderedPageBreak).ToList())
+                        {
+                            lrpb.Remove();
+                        }
+logger.Debug("  removed page breaks: " + element);
+                        var coalescedElement = WordprocessingMLUtil.CoalesceAdjacentRunsWithIdenticalFormatting(element);
+logger.Debug("  coalescedElement: " + coalescedElement);
+                        OpenXmlRegex.Replace(new[] { coalescedElement }, r, thisGuid, (para, match) =>
                         {
                             var matchString = match.Value.Trim();
+logger.Debug("  regex match: " + matchString);
                             var xmlText = matchString.Substring(2, matchString.Length - 4).Trim().Replace('“', '"').Replace('”', '"');
+logger.Debug("  xmlText: " + xmlText);
                             try
                             {
                                 xml = XElement.Parse(xmlText);
@@ -417,10 +435,13 @@ namespace OpenXmlPowerTools
                             return true;
                         }, false);
 
-                        var newPara = new XElement(element);
+                        var newPara = new XElement(coalescedElement);
+logger.Debug(" newpara seeded as: " + newPara); 
+logger.Debug(" Replacing runs...");
                         foreach (var rri in runReplacementInfo)
                         {
                             var runToReplace = newPara.Descendants(W.r).FirstOrDefault(rn => rn.Value == thisGuid && rn.Parent.Name != PA.Content);
+logger.Debug("  run to replace: " + runToReplace);
                             if (runToReplace == null)
                                 throw new OpenXmlPowerToolsException("Internal error");
                             if (rri.XmlExceptionMessage != null)
@@ -432,9 +453,12 @@ namespace OpenXmlPowerTools
                                 var newXml = new XElement(rri.Xml);
                                 newXml.Add(runToReplace);
                                 runToReplace.ReplaceWith(newXml);
+logger.Debug("  changed to: " + runToReplace);
                             }
                         }
+logger.Debug(" ==> New paragraph after replacements: " + newPara);
                         var coalescedParagraph = WordprocessingMLUtil.CoalesceAdjacentRunsWithIdenticalFormatting(newPara);
+logger.Debug(" ==> Coalesced paragraph: " + coalescedParagraph);
                         return coalescedParagraph;
                     }
                 }
@@ -612,6 +636,7 @@ namespace OpenXmlPowerTools
             {
                 if (element.Name == PA.Content)
                 {
+logger.Debug("ContentReplacementTransform " + element);
                     XElement para = element.Descendants(W.p).FirstOrDefault();
                     XElement run = element.Descendants(W.r).FirstOrDefault();
 
@@ -631,6 +656,7 @@ namespace OpenXmlPowerTools
 
                     if (para != null)
                     {
+logger.Debug("  para!=null");
 
                         XElement p = new XElement(W.p, para.Elements(W.pPr));
                         foreach(string line in newValue.Split('\n'))
@@ -640,17 +666,21 @@ namespace OpenXmlPowerTools
                                 (p.Elements().Count() > 1) ? new XElement(W.br) : null,
                                 new XElement(W.t, line)));
                         }
+logger.Debug("    out => " + p);
                         return p;
                     }
                     else
                     {
+logger.Debug("  para==null");
                         List<XElement> list = new List<XElement>();
                         foreach(string line in newValue.Split('\n'))
                         {
-                            list.Add(new XElement(W.r,
+                            var p2 = (new XElement(W.r,
                                 run.Elements().Where(e => e.Name != W.t),
                                 (list.Count > 0) ? new XElement(W.br) : null,
                                 new XElement(W.t, line)));
+                            list.Add(p2);
+logger.Debug("    out += " + p2);
                         }
                         return list;
                     }
