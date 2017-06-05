@@ -35,7 +35,6 @@ namespace OpenXmlPowerTools
 {
     public class DocumentAssembler
     {
-        static readonly log4net.ILog logger = log4net.LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
         public static WmlDocument AssembleDocument(WmlDocument templateDoc, XmlDocument data, out bool templateError)
         {
             XDocument xDoc = data.GetXDocument();
