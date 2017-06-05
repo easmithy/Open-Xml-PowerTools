@@ -344,10 +344,9 @@ namespace OpenXmlPowerTools
                             xml.Add(element.Elements(W.sdtContent).Elements());
                             return xml;
                         }
-                        var outElt = new XElement(element.Name,
+                        return new XElement(element.Name,
                             element.Attributes(),
                             element.Nodes().Select(n => TransformToMetadata(n, data, te)));
-                        return outElt;
                     }
                     return new XElement(element.Name,
                         element.Attributes(),
