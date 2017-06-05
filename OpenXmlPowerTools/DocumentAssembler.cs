@@ -319,6 +319,7 @@ logger.Debug("    Found content control directly nested in table row. Inverting.
             {
                 if (element.Name == W.sdt)
                 {
+logger.Debug(" Processing content control SDT");
                     var alias = (string)element.Elements(W.sdtPr).Elements(W.alias).Attributes(W.val).FirstOrDefault();
                     if (alias == null || alias == "" || s_AliasList.Contains(alias))
                     {
@@ -347,11 +348,14 @@ logger.Debug("    Found content control directly nested in table row. Inverting.
                                     return CreateParaErrorMessage("Error: Content control alias does not match metadata element name", te);
                             }
                             xml.Add(element.Elements(W.sdtContent).Elements());
+logger.Debug(" ==> out xml: " + xml);
                             return xml;
                         }
-                        return new XElement(element.Name,
+                        var outElt = new XElement(element.Name,
                             element.Attributes(),
                             element.Nodes().Select(n => TransformToMetadata(n, data, te)));
+logger.Debug(" ==> out elt: " + outElt);
+                        return outElt;
                     }
                     return new XElement(element.Name,
                         element.Attributes(),
@@ -440,7 +444,13 @@ logger.Debug(" newpara seeded as: " + newPara);
 logger.Debug(" Replacing runs...");
                         foreach (var rri in runReplacementInfo)
                         {
-                            var runToReplace = newPara.Descendants(W.r).FirstOrDefault(rn => rn.Value == thisGuid && rn.Parent.Name != PA.Content);
+                            var runToReplace = newPara.Descendants(W.r).FirstOrDefault(
+                                rn => rn.Value == thisGuid &&
+                                rn.Parent.Name != PA.Content && 
+                                rn.Parent.Name != PA.Conditional && 
+                                rn.Parent.Name != PA.EndConditional && 
+                                rn.Parent.Name != PA.Repeat
+                            );
 logger.Debug("  run to replace: " + runToReplace);
                             if (runToReplace == null)
                                 throw new OpenXmlPowerToolsException("Internal error");
@@ -453,7 +463,7 @@ logger.Debug("  run to replace: " + runToReplace);
                                 var newXml = new XElement(rri.Xml);
                                 newXml.Add(runToReplace);
                                 runToReplace.ReplaceWith(newXml);
-logger.Debug("  changed to: " + runToReplace);
+logger.Debug("  changed to: " + newXml);
                             }
                         }
 logger.Debug(" ==> New paragraph after replacements: " + newPara);
@@ -807,7 +817,7 @@ logger.Debug("    out += " + p2);
                     {
                         testValue = EvaluateXPathToString(data, xPath, false);
                     }
-	                catch (XPathException e)
+                    catch (XPathException e)
                     {
                         return CreateContextErrorMessage(element, e.Message, templateError);
                     }
