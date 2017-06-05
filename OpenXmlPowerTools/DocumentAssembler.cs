@@ -787,7 +787,7 @@ namespace OpenXmlPowerTools
                     {
                         testValue = EvaluateXPathToString(data, xPath, false);
                     }
-	               catch (XPathException e)
+	                catch (XPathException e)
                     {
                         return CreateContextErrorMessage(element, e.Message, templateError);
                     }
