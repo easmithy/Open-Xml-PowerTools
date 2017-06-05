@@ -642,6 +642,7 @@ namespace OpenXmlPowerTools
 
                     if (para != null)
                     {
+
                         XElement p = new XElement(W.p, para.Elements(W.pPr));
                         foreach(string line in newValue.Split('\n'))
                         {
