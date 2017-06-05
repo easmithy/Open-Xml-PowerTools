@@ -657,11 +657,10 @@ namespace OpenXmlPowerTools
                         List<XElement> list = new List<XElement>();
                         foreach(string line in newValue.Split('\n'))
                         {
-                            var p2 = (new XElement(W.r,
+                            list.Add(new XElement(W.r,
                                 run.Elements().Where(e => e.Name != W.t),
                                 (list.Count > 0) ? new XElement(W.br) : null,
                                 new XElement(W.t, line)));
-                            list.Add(p2);
                         }
                         return list;
                     }
