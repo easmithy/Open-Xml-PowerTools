@@ -92,7 +92,20 @@ namespace OpenXmlPowerTools
         public static int Replace(IEnumerable<XElement> content, Regex regex, string replacement,
             Func<XElement, Match, bool> doReplacement)
         {
-            return ReplaceInternal(content, regex, replacement, doReplacement, false, null, true);
+            return ReplaceInternal(content, regex, (a, b) => replacement, doReplacement, false, null, true);
+        }
+
+        /// <summary>
+        /// This overload enables specifying a callback function that returns the
+        /// replacement string, rather than specifying the replacement string directly.
+        /// This is useful for client code that wants to perform more complex transforms
+        /// than are allowed by the native regex machinery.
+        /// </summary>
+        public static int Replace(IEnumerable<XElement> content, Regex regex,
+            Func<XElement, Match, string> getReplacement,
+            Func<XElement, Match, bool> doReplacement)
+        {
+            return ReplaceInternal(content, regex, getReplacement, doReplacement, false, null, true);
         }
 
         /// <summary>
@@ -101,7 +114,7 @@ namespace OpenXmlPowerTools
         public static int Replace(IEnumerable<XElement> content, Regex regex, string replacement,
             Func<XElement, Match, bool> doReplacement, bool coalesceContent)
         {
-            return ReplaceInternal(content, regex, replacement, doReplacement, false, null, coalesceContent);
+            return ReplaceInternal(content, regex, (a, b) => replacement, doReplacement, false, null, coalesceContent);
         }
 
         /// <summary>
@@ -122,10 +135,11 @@ namespace OpenXmlPowerTools
         public static int Replace(IEnumerable<XElement> content, Regex regex, string replacement,
             Func<XElement, Match, bool> doReplacement, bool trackRevisions, string author)
         {
-            return ReplaceInternal(content, regex, replacement, doReplacement, trackRevisions, author, true);
+            return ReplaceInternal(content, regex, (a, b) => replacement, doReplacement, trackRevisions, author, true);
         }
 
-        private static int ReplaceInternal(IEnumerable<XElement> content, Regex regex, string replacement,
+        private static int ReplaceInternal(IEnumerable<XElement> content, Regex regex,
+            Func<XElement, Match, string> getReplacement,
             Func<XElement, Match, bool> callback, bool trackRevisions, string revisionTrackingAuthor,
             bool coalesceContent)
         {
@@ -146,7 +160,7 @@ namespace OpenXmlPowerTools
                 var replInfo = new ReplaceInternalInfo { Count = 0 };
                 foreach (XElement c in contentList)
                 {
-                    var newC = (XElement) WmlSearchAndReplaceTransform(c, regex, replacement, callback, trackRevisions,
+                    var newC = (XElement) WmlSearchAndReplaceTransform(c, regex, getReplacement, callback, trackRevisions,
                         revisionTrackingAuthor, replInfo, coalesceContent);
                     c.ReplaceNodes(newC.Nodes());
                 }
@@ -190,7 +204,7 @@ namespace OpenXmlPowerTools
                 var counter = new ReplaceInternalInfo { Count = 0 };
                 foreach (XElement c in contentList)
                 {
-                    var newC = (XElement) PmlSearchAndReplaceTransform(c, regex, replacement, callback, counter);
+                    var newC = (XElement) PmlSearchAndReplaceTransform(c, regex, getReplacement, callback, counter);
                     c.ReplaceNodes(newC.Nodes());
                 }
 
@@ -200,7 +214,8 @@ namespace OpenXmlPowerTools
             return 0;
         }
 
-        private static object WmlSearchAndReplaceTransform(XNode node, Regex regex, string replacement,
+        private static object WmlSearchAndReplaceTransform(XNode node, Regex regex,
+            Func<XElement, Match, string> getReplacement,
             Func<XElement, Match, bool> callback, bool trackRevisions, string revisionTrackingAuthor,
             ReplaceInternalInfo replInfo, bool coalesceContent)
         {
@@ -220,7 +235,7 @@ namespace OpenXmlPowerTools
                 {
                     var paragraphWithSplitRuns = new XElement(W.p,
                         paragraph.Attributes(),
-                        paragraph.Nodes().Select(n => WmlSearchAndReplaceTransform(n, regex, replacement, callback,
+                        paragraph.Nodes().Select(n => WmlSearchAndReplaceTransform(n, regex, getReplacement, callback,
                             trackRevisions, revisionTrackingAuthor, replInfo, coalesceContent)));
 
                     IEnumerable<XElement> runsTrimmed = paragraphWithSplitRuns
@@ -238,7 +253,7 @@ namespace OpenXmlPowerTools
                     replInfo.Count += matchCollection.Count;
 
                     // Process Match
-                    if (replacement == null)
+                    if (getReplacement == null)
                     {
                         if (callback == null) return paragraph;
 
@@ -266,6 +281,7 @@ namespace OpenXmlPowerTools
 
                         // save away first run properties
 
+                        var replacement = getReplacement(element, match);
                         if (trackRevisions)
                         {
                             if (replacement != "")
@@ -372,7 +388,7 @@ namespace OpenXmlPowerTools
                         if ((e.Name == W.ins) && e.Elements(W.r).Elements(W.t).Any())
                             return e;
 
-                        return WmlSearchAndReplaceTransform(e, regex, replacement, callback,
+                        return WmlSearchAndReplaceTransform(e, regex, getReplacement, callback,
                             trackRevisions, revisionTrackingAuthor, replInfo, coalesceContent);
                     }));
                 return coalesceContent
@@ -384,7 +400,7 @@ namespace OpenXmlPowerTools
             {
                 List<object> collectionOfCollections = element
                     .Elements()
-                    .Select(n => WmlSearchAndReplaceTransform(n, regex, replacement, callback, trackRevisions,
+                    .Select(n => WmlSearchAndReplaceTransform(n, regex, getReplacement, callback, trackRevisions,
                         revisionTrackingAuthor, replInfo, coalesceContent))
                     .ToList();
                 List<object> collectionOfIns = collectionOfCollections
@@ -415,7 +431,7 @@ namespace OpenXmlPowerTools
             return new XElement(element.Name,
                 element.Attributes(),
                 element.Nodes()
-                    .Select(n => WmlSearchAndReplaceTransform(n, regex, replacement, callback, trackRevisions,
+                    .Select(n => WmlSearchAndReplaceTransform(n, regex, getReplacement, callback, trackRevisions,
                         revisionTrackingAuthor, replInfo, coalesceContent)));
         }
 
@@ -434,7 +450,8 @@ namespace OpenXmlPowerTools
                 element.Nodes().Select(TransformToDelText));
         }
 
-        private static object PmlSearchAndReplaceTransform(XNode node, Regex regex, string replacement,
+        private static object PmlSearchAndReplaceTransform(XNode node, Regex regex,
+            Func<XElement, Match, string> getReplacement,
             Func<XElement, Match, bool> callback, ReplaceInternalInfo counter)
         {
             var element = node as XElement;
@@ -450,7 +467,7 @@ namespace OpenXmlPowerTools
                 var paragraphWithSplitRuns = new XElement(A.p,
                     paragraph.Attributes(),
                     paragraph.Nodes()
-                        .Select(n => PmlSearchAndReplaceTransform(n, regex, replacement, callback, counter)));
+                        .Select(n => PmlSearchAndReplaceTransform(n, regex, getReplacement, callback, counter)));
 
                 List<XElement> runsTrimmed = paragraphWithSplitRuns
                     .Descendants(A.r)
@@ -468,7 +485,7 @@ namespace OpenXmlPowerTools
 
                 MatchCollection matchCollection = regex.Matches(content);
                 counter.Count += matchCollection.Count;
-                if (replacement == null)
+                if (getReplacement == null)
                 {
                     foreach (Match match in matchCollection.Cast<Match>())
                         callback(paragraph, match);
@@ -497,6 +514,7 @@ namespace OpenXmlPowerTools
                         // in LINQ to XML that uses snapshot semantics and removes every element from
                         // its parent.
 
+                        var replacement = getReplacement(element, match);
                         var newFirstRun = new XElement(A.r,
                             firstRun.Element(A.rPr),
                             new XElement(A.t, replacement));
@@ -566,7 +584,7 @@ namespace OpenXmlPowerTools
 
             return new XElement(element.Name,
                 element.Attributes(),
-                element.Nodes().Select(n => PmlSearchAndReplaceTransform(n, regex, replacement, callback, counter)));
+                element.Nodes().Select(n => PmlSearchAndReplaceTransform(n, regex, getReplacement, callback, counter)));
         }
 
         private class ReplaceInternalInfo
