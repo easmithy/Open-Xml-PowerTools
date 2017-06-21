@@ -351,16 +351,10 @@ namespace OpenXmlPowerTools
                         else // not tracked revisions
                         {
                             foreach (XElement runToDelete in runCollection.Skip(1).ToList())
-                            {
                                 if (runToDelete.Parent != null && runToDelete.Parent.Name == W.ins)
-                                {
                                     runToDelete.Parent.Remove();
-                                }
                                 else
-                                {
                                     runToDelete.Remove();
-                                }
-                            }
 
                             // We coalesce runs as some methods, e.g., in DocumentAssembler,
                             // will try to find the replacement string even though they
@@ -369,13 +363,9 @@ namespace OpenXmlPowerTools
                             List<XElement> newRuns = UnicodeMapper.StringToCoalescedRunList(newTextValue,
                                 firstRunProperties);
                             if (firstRun.Parent != null && firstRun.Parent.Name == W.ins)
-                            {
                                 firstRun.Parent.ReplaceWith(newRuns);
-                            }
                             else
-                            {
                                 firstRun.ReplaceWith(newRuns);
-                            }
                         }
                     }
 
