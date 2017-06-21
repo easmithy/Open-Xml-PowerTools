@@ -863,6 +863,8 @@ namespace OpenXmlPowerTools
                         {
                             if (ce.Elements(W.del).Any())
                             {
+                                return dontConsolidate;
+#if false
                                 // for w:ins/w:del/w:r/w:delText
                                 if ((ce.Elements(W.del).Elements(W.r).Elements().Count(e => e.Name != W.rPr) != 1) ||
                                     !ce.Elements().Elements().Elements(W.delText).Any())
@@ -891,6 +893,7 @@ namespace OpenXmlPowerTools
                                            .Elements(W.rPr)
                                            .Select(rPr => rPr.ToString(SaveOptions.None))
                                            .StringConcatenate();
+#endif
                             }
 
                             // w:ins/w:r/w:t
@@ -905,9 +908,12 @@ namespace OpenXmlPowerTools
                                 ? ((DateTime) dateIns2).ToString("s")
                                 : string.Empty;
 
+                            string idIns2 = (string)ce.Attribute(W.id);
+
                             return "Wins2" +
                                    authorIns2 +
                                    dateInsString2 +
+                                   idIns2 +
                                    ce.Elements()
                                        .Elements(W.rPr)
                                        .Select(rPr => rPr.ToString(SaveOptions.None))
@@ -972,6 +978,7 @@ namespace OpenXmlPowerTools
 
                     if (g.First().Name == W.ins)
                     {
+#if false
                         if (g.First().Elements(W.del).Any())
                             return new XElement(W.ins,
                                 g.First().Attributes(),
@@ -980,7 +987,7 @@ namespace OpenXmlPowerTools
                                     new XElement(W.r,
                                         g.First().Elements(W.del).Elements(W.r).Elements(W.rPr),
                                         new XElement(W.delText, xs, textValue))));
-
+#endif
                         return new XElement(W.ins,
                             g.First().Attributes(),
                             new XElement(W.r,
@@ -1280,6 +1287,28 @@ namespace OpenXmlPowerTools
                     element.Nodes().Select(n => WmlOrderElementsPerStandard(n)));
             }
             return node;
+        }
+
+        public static WmlDocument BreakLinkToTemplate(WmlDocument source)
+        {
+            using (MemoryStream ms = new MemoryStream())
+            {
+                ms.Write(source.DocumentByteArray, 0, source.DocumentByteArray.Length);
+                using (WordprocessingDocument wDoc = WordprocessingDocument.Open(ms, true))
+                {
+                    var efpp = wDoc.ExtendedFilePropertiesPart;
+                    if (efpp != null)
+                    {
+                        var xd = efpp.GetXDocument();
+                        var template = xd.Descendants(EP.Template).FirstOrDefault();
+                        if (template != null)
+                            template.Value = "";
+                        efpp.PutXDocument();
+                    }
+                }
+                var result = new WmlDocument(source.FileName, ms.ToArray());
+                return result;
+            }
         }
     }
 
@@ -5618,8 +5647,10 @@ namespace OpenXmlPowerTools
         public static XNamespace pt = "http://powertools.codeplex.com/2011";
         public static XName Uri = pt + "Uri";
         public static XName Unid = pt + "Unid";
-        public static XName PrevUnid = pt + "PrevUnid";
         public static XName SHA1Hash = pt + "SHA1Hash";
+        public static XName CorrelatedSHA1Hash = pt + "CorrelatedSHA1Hash";
+        public static XName StructureSHA1Hash = pt + "StructureSHA1Hash";
+        public static XName CorrelationSet = pt + "CorrelationSet";
         public static XName Status = pt + "Status";
 
         public static XName Level = pt + "Level";
