@@ -95,6 +95,12 @@ namespace OpenXmlPowerTools
             return ReplaceInternal(content, regex, (a, b) => replacement, doReplacement, false, null, true);
         }
 
+        /// <summary>
+        /// This overload enables specifying a callback function that returns the
+        /// replacement string, rather than specifying the replacement string directly.
+        /// This is useful for client code that wants to perform more complex transforms
+        /// than are allowed by the native regex machinery.
+        /// </summary>
         public static int Replace(IEnumerable<XElement> content, Regex regex,
             Func<XElement, Match, string> getReplacement,
             Func<XElement, Match, bool> doReplacement)
